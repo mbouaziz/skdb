@@ -16,6 +16,7 @@ import type {
   FromWasm,
   CtxMapping,
 } from "./skstore_types.js";
+import type * as Internal from "./skstore_internal_types.js";
 import { LSelfImpl, SKStoreFactoryImpl } from "./skstore_impl.js";
 // prettier-ignore
 import type { SKDBShared } from "#skdb/skdb_types.js";
@@ -220,7 +221,7 @@ export class ContextImpl implements Context {
     ) as Opt<V>;
   };
 
-  getArraySelf = <K, V>(lazyHdl: ptr, key: K) => {
+  getArraySelf = <K, V>(lazyHdl: ptr<Internal.LHandle>, key: K) => {
     return this.skjson.importJSON(
       this.exports.SKIP_SKStore_getArraySelf(
         this.pointer(),
@@ -229,7 +230,7 @@ export class ContextImpl implements Context {
       ),
     ) as V[];
   };
-  getOneSelf = <K, V>(lazyHdl: ptr, key: K) => {
+  getOneSelf = <K, V>(lazyHdl: ptr<Internal.LHandle>, key: K) => {
     return this.skjson.importJSON(
       this.exports.SKIP_SKStore_getSelf(
         this.pointer(),
@@ -238,7 +239,7 @@ export class ContextImpl implements Context {
       ),
     ) as V;
   };
-  maybeGetOneSelf = <K, V>(lazyHdl: ptr, key: K) => {
+  maybeGetOneSelf = <K, V>(lazyHdl: ptr<Internal.LHandle>, key: K) => {
     return this.skjson.importJSON(
       this.exports.SKIP_SKStore_maybeGetSelf(
         this.pointer(),
@@ -330,9 +331,13 @@ export class ContextImpl implements Context {
 class NonEmptyIteratorImpl<T> implements NonEmptyIterator<T> {
   private skjson: SKJSON;
   private exports: FromWasm;
-  private pointer: ptr;
+  private pointer: ptr<Internal.NonEmptyIterator>;
 
-  constructor(skjson: SKJSON, exports: FromWasm, pointer: ptr) {
+  constructor(
+    skjson: SKJSON,
+    exports: FromWasm,
+    pointer: ptr<Internal.NonEmptyIterator>,
+  ) {
     this.skjson = skjson;
     this.exports = exports;
     this.pointer = pointer;
@@ -379,9 +384,13 @@ class NonEmptyIteratorImpl<T> implements NonEmptyIterator<T> {
 class WriterImpl<K, T> {
   private skjson: SKJSON;
   private exports: FromWasm;
-  private pointer: ptr;
+  private pointer: ptr<Internal.TWriter>;
 
-  constructor(skjson: SKJSON, exports: FromWasm, pointer: ptr) {
+  constructor(
+    skjson: SKJSON,
+    exports: FromWasm,
+    pointer: ptr<Internal.TWriter>,
+  ) {
     this.skjson = skjson;
     this.exports = exports;
     this.pointer = pointer;
@@ -408,50 +417,71 @@ interface ToWasm {
   // Context
   SKIP_SKStore_applyMapFun(
     fn: int,
-    context: ptr,
-    writer: ptr,
-    key: ptr,
-    it: ptr,
+    context: ptr<Internal.Context>,
+    writer: ptr<Internal.TWriter>,
+    key: ptr<Internal.CJSON>,
+    it: ptr<Internal.NonEmptyIterator>,
   ): void;
   SKIP_SKStore_applyMapTableFun(
     fn: int,
-    context: ptr,
-    writer: ptr,
-    row: ptr,
+    context: ptr<Internal.Context>,
+    writer: ptr<Internal.TWriter>,
+    row: ptr<Internal.CJArray>,
     occ: int,
   ): void;
-  SKIP_SKStore_applyConvertToRowFun(fn: int, key: ptr, it: ptr): ptr;
-  SKIP_SKStore_init(context: ptr): void;
-  SKIP_SKStore_applyLazyFun(fn: int, context: ptr, self: ptr, key: ptr): ptr;
-  SKIP_SKStore_applyParamsFun(fn: int, context: ptr, key: ptr): ptr;
+  SKIP_SKStore_applyConvertToRowFun(
+    fn: int,
+    key: ptr<Internal.CJSON>,
+    it: ptr<Internal.NonEmptyIterator>,
+  ): ptr<Internal.CJSON>;
+  SKIP_SKStore_init(context: ptr<Internal.Context>): void;
+  SKIP_SKStore_applyLazyFun(
+    fn: int,
+    context: ptr<Internal.Context>,
+    self: ptr<Internal.LHandle>,
+    key: ptr<Internal.CJSON>,
+  ): ptr<Internal.CJSON>;
+  SKIP_SKStore_applyParamsFun(
+    fn: int,
+    context: ptr<Internal.Context>,
+    key: ptr<Internal.CJSON>,
+  ): ptr<Internal.CJSON>;
   SKIP_SKStore_applyLazyAsyncFun(
     fn: int,
-    callId: ptr,
-    name: ptr,
-    key: ptr,
-    param: ptr,
+    callId: ptr<Internal.String>,
+    name: ptr<Internal.String>,
+    key: ptr<Internal.CJSON>,
+    param: ptr<Internal.CJSON>,
   ): void;
 
   // Accumulator
-  SKIP_SKStore_applyAccumulate(fn: int, acc: ptr, value: ptr): ptr;
-  SKIP_SKStore_applyDismiss(fn: int, acc: ptr, value: ptr): Opt<ptr>;
+  SKIP_SKStore_applyAccumulate(
+    fn: int,
+    acc: ptr<Internal.CJSON>,
+    value: ptr<Internal.CJSON>,
+  ): ptr<Internal.CJSON>;
+  SKIP_SKStore_applyDismiss(
+    fn: int,
+    acc: ptr<Internal.CJSON>,
+    value: ptr<Internal.CJSON>,
+  ): Opt<ptr<Internal.CJSON>>;
   // Utils
-  SKIP_SKStore_getErrorHdl(exn: ptr): number;
+  SKIP_SKStore_getErrorHdl(exn: ptr<Internal.Exception>): number;
 }
 
 class Ref {
-  pointers: ptr[] = [];
+  pointers: ptr<Internal.Context>[] = [];
 
-  push(pointer: ptr) {
+  push(pointer: ptr<Internal.Context>) {
     this.pointers.push(pointer);
   }
 
-  get() {
+  get(): Opt<ptr<Internal.Context>> {
     if (this.pointers.length == 0) return null;
     return this.pointers[this.pointers.length - 1];
   }
 
-  pop() {
+  pop(): void {
     this.pointers.pop();
   }
 }
@@ -462,29 +492,56 @@ class LinksImpl implements Links {
   skjson?: SKJSON;
 
   detachHandle!: (fn: int) => void;
-  applyMapFun!: (fn: int, context: ptr, writer: ptr, key: ptr, it: ptr) => void;
+  applyMapFun!: (
+    fn: int,
+    context: ptr<Internal.Context>,
+    writer: ptr<Internal.TWriter>,
+    key: ptr<Internal.CJSON>,
+    it: ptr<Internal.NonEmptyIterator>,
+  ) => void;
   applyMapTableFun!: (
     fn: int,
-    context: ptr,
-    writer: ptr,
-    row: ptr,
+    context: ptr<Internal.Context>,
+    writer: ptr<Internal.TWriter>,
+    row: ptr<Internal.CJArray>,
     occ: int,
   ) => void;
 
-  applyLazyFun!: (fn: int, context: ptr, self: ptr, key: ptr) => ptr;
-  applyParamsFun!: (fn: int, context: ptr, key: ptr) => ptr;
+  applyLazyFun!: (
+    fn: int,
+    context: ptr<Internal.Context>,
+    self: ptr<Internal.LHandle>,
+    key: ptr<Internal.CJSON>,
+  ) => ptr<Internal.CJSON>;
+  applyParamsFun!: (
+    fn: int,
+    context: ptr<Internal.Context>,
+    key: ptr<Internal.CJSON>,
+  ) => ptr<Internal.CJSON>;
   applyLazyAsyncFun!: (
     fn: int,
-    callId: ptr,
-    name: ptr,
-    key: ptr,
-    param: ptr,
+    callId: ptr<Internal.String>,
+    name: ptr<Internal.String>,
+    key: ptr<Internal.CJSON>,
+    param: ptr<Internal.CJSON>,
   ) => void;
-  init!: (context: ptr) => void;
-  applyAccumulate!: (fn: int, acc: ptr, value: ptr) => ptr;
-  applyDismiss!: (fn: int, acc: ptr, value: ptr) => Opt<ptr>;
-  getErrorHdl!: (exn: ptr) => number;
-  applyConvertToRowFun!: (fn: int, key: ptr, it: ptr) => ptr;
+  init!: (context: ptr<Internal.Context>) => void;
+  applyAccumulate!: (
+    fn: int,
+    acc: ptr<Internal.CJSON>,
+    value: ptr<Internal.CJSON>,
+  ) => ptr<Internal.CJSON>;
+  applyDismiss!: (
+    fn: int,
+    acc: ptr<Internal.CJSON>,
+    value: ptr<Internal.CJSON>,
+  ) => Opt<ptr<Internal.CJSON>>;
+  getErrorHdl!: (exn: ptr<Internal.Exception>) => number;
+  applyConvertToRowFun!: (
+    fn: int,
+    key: ptr<Internal.CJSON>,
+    it: ptr<Internal.NonEmptyIterator>,
+  ) => ptr<Internal.CJSON>;
 
   private initFn!: () => void;
 
@@ -503,7 +560,13 @@ class LinksImpl implements Links {
       return this.skjson;
     };
     const ref = new Ref();
-    this.applyMapFun = (fn: int, ctx: ptr, writer: ptr, key: ptr, it: ptr) => {
+    this.applyMapFun = (
+      fn: int,
+      ctx: ptr<Internal.Context>,
+      writer: ptr<Internal.TWriter>,
+      key: ptr<Internal.CJSON>,
+      it: ptr<Internal.NonEmptyIterator>,
+    ) => {
       ref.push(ctx);
       const jsu = skjson();
       const w = new WriterImpl(jsu, fromWasm, writer);
@@ -525,9 +588,9 @@ class LinksImpl implements Links {
     };
     this.applyMapTableFun = (
       fn: int,
-      ctx: ptr,
-      writer: ptr,
-      row: ptr,
+      ctx: ptr<Internal.Context>,
+      writer: ptr<Internal.TWriter>,
+      row: ptr<Internal.CJArray>,
       occ: int,
     ) => {
       ref.push(ctx);
@@ -541,7 +604,11 @@ class LinksImpl implements Links {
       ref.pop();
     };
 
-    this.applyConvertToRowFun = (fn: int, key: ptr, it: ptr) => {
+    this.applyConvertToRowFun = (
+      fn: int,
+      key: ptr<Internal.CJSON>,
+      it: ptr<Internal.NonEmptyIterator>,
+    ) => {
       const jsu = skjson();
       const res = this.handles.apply(fn, [
         jsu.importJSON(key),
@@ -552,10 +619,10 @@ class LinksImpl implements Links {
 
     this.applyLazyAsyncFun = (
       fn: int,
-      skcall: ptr,
-      skname: ptr,
-      skkey: ptr,
-      skparams: ptr,
+      skcall: ptr<Internal.String>,
+      skname: ptr<Internal.String>,
+      skkey: ptr<Internal.CJSON>,
+      skparams: ptr<Internal.CJSON>,
     ) => {
       const jsu = skjson();
       const callId = jsu.importString(skcall);
@@ -631,7 +698,12 @@ class LinksImpl implements Links {
         });
     };
 
-    this.applyLazyFun = (fn: int, ctx: ptr, hdl: ptr, key: ptr) => {
+    this.applyLazyFun = (
+      fn: int,
+      ctx: ptr<Internal.Context>,
+      hdl: ptr<Internal.LHandle>,
+      key: ptr<Internal.CJSON>,
+    ) => {
       ref.push(ctx);
       const jsu = skjson();
       const context = new ContextImpl(jsu, fromWasm, this.handles, ref);
@@ -645,21 +717,29 @@ class LinksImpl implements Links {
       return res;
     };
 
-    this.applyParamsFun = (fn: int, ctx: ptr, key: ptr) => {
+    this.applyParamsFun = (
+      fn: int,
+      ctx: ptr<Internal.Context>,
+      key: ptr<Internal.CJSON>,
+    ) => {
       ref.push(ctx);
       const jsu = skjson();
       const res = jsu.exportJSON(this.handles.apply(fn, [jsu.importJSON(key)]));
       ref.pop();
       return res;
     };
-    this.init = (context: ptr) => {
+    this.init = (context: ptr<Internal.Context>) => {
       ref.push(context);
       if (!this.initFn)
         throw new Error("SKStore init function must be defined");
       this.initFn();
       ref.pop();
     };
-    this.applyAccumulate = (fn: int, acc: ptr, value: ptr) => {
+    this.applyAccumulate = (
+      fn: int,
+      acc: ptr<Internal.CJSON>,
+      value: ptr<Internal.CJSON>,
+    ) => {
       const jsu = skjson();
       const accumulator = this.handles.get(fn) as Accumulator<any, any>;
       const result = accumulator.accumulate(
@@ -668,7 +748,11 @@ class LinksImpl implements Links {
       );
       return jsu.exportJSON(result);
     };
-    this.applyDismiss = (fn: int, acc: ptr, value: ptr) => {
+    this.applyDismiss = (
+      fn: int,
+      acc: ptr<Internal.CJSON>,
+      value: ptr<Internal.CJSON>,
+    ) => {
       const jsu = skjson();
       const accumulator = this.handles.get(fn) as Accumulator<any, any>;
       const result = accumulator.dismiss(
@@ -680,7 +764,7 @@ class LinksImpl implements Links {
     this.detachHandle = (idx: int) => {
       this.handles.delete(idx);
     };
-    this.getErrorHdl = (exn: ptr) => {
+    this.getErrorHdl = (exn: ptr<Internal.Exception>) => {
       return this.handles.register(utils.getErrorObject(exn));
     };
     let create = (init: () => void) => {
@@ -723,21 +807,25 @@ class Manager implements ToWasmManager {
     toWasm.SKIP_SKStore_detachHandle = (fn: int) => links.detachHandle(fn);
     toWasm.SKIP_SKStore_applyMapFun = (
       fn: int,
-      context: ptr,
-      writer: ptr,
-      key: ptr,
-      it: ptr,
+      context: ptr<Internal.Context>,
+      writer: ptr<Internal.TWriter>,
+      key: ptr<Internal.CJSON>,
+      it: ptr<Internal.NonEmptyIterator>,
     ) => links.applyMapFun(fn, context, writer, key, it);
     toWasm.SKIP_SKStore_applyMapTableFun = (
       fn: int,
-      context: ptr,
-      writer: ptr,
-      row: ptr,
+      context: ptr<Internal.Context>,
+      writer: ptr<Internal.TWriter>,
+      row: ptr<Internal.CJArray>,
       occ: int,
     ) => links.applyMapTableFun(fn, context, writer, row, occ);
-    toWasm.SKIP_SKStore_applyConvertToRowFun = (fn: int, key: ptr, it: ptr) =>
-      links.applyConvertToRowFun(fn, key, it);
-    toWasm.SKIP_SKStore_init = (context: ptr) => links.init(context);
+    toWasm.SKIP_SKStore_applyConvertToRowFun = (
+      fn: int,
+      key: ptr<Internal.CJSON>,
+      it: ptr<Internal.NonEmptyIterator>,
+    ) => links.applyConvertToRowFun(fn, key, it);
+    toWasm.SKIP_SKStore_init = (context: ptr<Internal.Context>) =>
+      links.init(context);
     toWasm.SKIP_SKStore_applyLazyFun = (fn, context, self, key) =>
       links.applyLazyFun(fn, context, self, key);
 
@@ -745,16 +833,23 @@ class Manager implements ToWasmManager {
       links.applyParamsFun(fn, context, key);
     toWasm.SKIP_SKStore_applyLazyAsyncFun = (
       fn: int,
-      call: ptr,
-      name: ptr,
-      key: ptr,
-      param: ptr,
+      call: ptr<Internal.String>,
+      name: ptr<Internal.String>,
+      key: ptr<Internal.CJSON>,
+      param: ptr<Internal.CJSON>,
     ) => links.applyLazyAsyncFun(fn, call, name, key, param);
-    toWasm.SKIP_SKStore_applyAccumulate = (fn: int, acc: ptr, value: ptr) =>
-      links.applyAccumulate(fn, acc, value);
-    toWasm.SKIP_SKStore_applyDismiss = (fn: int, acc: ptr, value: ptr) =>
-      links.applyDismiss(fn, acc, value);
-    toWasm.SKIP_SKStore_getErrorHdl = (exn: ptr) => links.getErrorHdl(exn);
+    toWasm.SKIP_SKStore_applyAccumulate = (
+      fn: int,
+      acc: ptr<Internal.CJSON>,
+      value: ptr<Internal.CJSON>,
+    ) => links.applyAccumulate(fn, acc, value);
+    toWasm.SKIP_SKStore_applyDismiss = (
+      fn: int,
+      acc: ptr<Internal.CJSON>,
+      value: ptr<Internal.CJSON>,
+    ) => links.applyDismiss(fn, acc, value);
+    toWasm.SKIP_SKStore_getErrorHdl = (exn: ptr<Internal.Exception>) =>
+      links.getErrorHdl(exn);
     return links;
   };
 }
